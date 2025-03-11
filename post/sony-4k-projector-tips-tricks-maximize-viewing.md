@@ -8,8 +8,7 @@
     <meta property="og:image" content="https://articleaigenerator.com/generated_image/Sony-4K-Projector-Tips-and-Tricks-to-Maximize-Your-Viewing-Experience-1741675191.png">
     <meta property="og:url" content="https://github.com/Mrgwaps/smart-tv-reviews-ai/tree/main/post">
     <meta property="og:type" content="article">
-    <title>Sony 4K Projector: Tips And Tricks To Maximize Your Viewing Experience</title>
-</head>
+    </head>
 <body>
     <h1>Sony 4K Projector: Tips And Tricks To Maximize Your Viewing Experience</h1>
     <p><img src="https://articleaigenerator.com/generated_image/Sony-4K-Projector-Tips-and-Tricks-to-Maximize-Your-Viewing-Experience-1741675191.png"></p>
