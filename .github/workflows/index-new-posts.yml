@@ -1,0 +1,87 @@
+name: Index New Posts
+
+on:
+  push:
+    paths:
+      - 'post/**/*.md' # Trigger on any Markdown file added or modified in post directory or subdirectories
+
+jobs:
+  index-posts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up PowerShell
+        uses: actions/setup-powershell@v1
+
+      - name: Run IndexNow Script
+        env:
+          INDEXNOW_KEY: ${{ secrets.INDEXNOW_KEY }}
+        run: |
+          $script = @'
+          param(
+              [string]$GitHubUser = "Mrgwaps",
+              [string]$GitHubRepo = "smart-tv-reviews-ai",
+              [string]$IndexNowKey = $env:INDEXNOW_KEY,
+              [string]$SearchEngine = "api.indexnow.org"
+          )
+
+          $ProductionDomain = "raw.githubusercontent.com/$GitHubUser/$GitHubRepo/main"
+
+          # Key verification
+          $keyLocation = "https://$ProductionDomain/$IndexNowKey.txt"
+          try {
+              $keyContent = (Invoke-WebRequest -Uri $keyLocation -UseBasicParsing).Content.Trim()
+              if ($keyContent -eq $IndexNowKey) {
+                  Write-Host "✅ Verified key at: $keyLocation" -ForegroundColor Green
+              } else {
+                  Write-Host "❌ Key content mismatch at: $keyLocation" -ForegroundColor Red
+                  exit 1
+              }
+          }
+          catch {
+              Write-Host "❌ Key verification failed: $($_.Exception.Message)" -ForegroundColor Red
+              exit 1
+          }
+
+          # Fetch article URLs
+          $githubApiUrl = "https://api.github.com/repos/$GitHubUser/$GitHubRepo/contents/post"
+          $headers = @{ 
+              "Accept" = "application/vnd.github+json"
+              "X-GitHub-Api-Version" = "2022-11-28"
+          }
+
+          $response = Invoke-RestMethod -Uri $githubApiUrl -Headers $headers
+          $articleUrls = $response | Where-Object { $_.type -eq "file" -and $_.name -match "\.md$" } | 
+                         ForEach-Object { "https://$ProductionDomain/post/" + $_.name }
+
+          # IndexNow submission
+          $indexNowBody = @{
+              host = $ProductionDomain
+              key = $IndexNowKey
+              keyLocation = $keyLocation
+              urlList = $articleUrls
+          } | ConvertTo-Json
+
+          try {
+              $response = Invoke-RestMethod -Uri "https://$SearchEngine/indexnow" `
+                  -Method Post `
+                  -ContentType "application/json; charset=utf-8" `
+                  -Body $indexNowBody
+
+              Write-Host "🚀 Successfully submitted $($articleUrls.Count) articles" -ForegroundColor Cyan
+              $response | Format-List | Out-String | Write-Host -ForegroundColor DarkGray
+          }
+          catch {
+              Write-Host "❌ Submission error: $($_.Exception.Message)" -ForegroundColor Red
+              if ($_.ErrorDetails.Message) {
+                  Write-Host "🔍 Response details: $($_.ErrorDetails.Message)" -ForegroundColor Yellow
+              }
+          }
+          '@
+
+          # Save script to file and execute it
+          Set-Content ./index-posts.ps1 -Value $script
+          pwsh ./index-posts.ps1
