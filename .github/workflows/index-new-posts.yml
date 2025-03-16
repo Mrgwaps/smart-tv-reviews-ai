@@ -1,9 +1,13 @@
 name: Index New Posts
 
 on:
+  # Trigger when a Markdown file is added or modified in the post directory or subdirectories
   push:
     paths:
-      - 'post/**/*.md' # Trigger on any Markdown file added or modified in post directory or subdirectories
+      - 'post/**/*.md'
+  # Schedule the workflow to run daily at midnight UTC
+  schedule:
+    - cron: '0 0 * * *'
 
 jobs:
   index-posts:
