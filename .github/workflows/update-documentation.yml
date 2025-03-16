@@ -1,0 +1,88 @@
+name: Update Documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'post/**.md'
+
+jobs:
+  update-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 2
+      
+      - name: Update README and Sitemap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: "https://github.com/Mrgwaps/smart-tv-reviews-ai"
+          BASE_URL: "https://mrgwaps.github.io/smart-tv-reviews-ai"
+        run: |
+          # Install dependencies
+          pip install beautifulsoup4
+          
+          # Get list of new/changed markdown files
+          POST_FILES=$(git diff --name-only HEAD~1 HEAD -- 'post/*.md' || echo "")
+          
+          # Update README.md
+          for file in $POST_FILES; do
+            if [ -f "$file" ]; then
+              # Extract post metadata (handle no frontmatter)
+              FILENAME=$(basename "$file" .md)
+              TITLE=$(grep -m 1 "^# " "$file" | sed 's/^# //' || echo "")
+              if [ -z "$TITLE" ]; then
+                TITLE=$(echo "$FILENAME" | sed 's/-/ /g') # Fallback: filename to title
+              fi
+              
+              # Create markdown link
+              LINK="- [${TITLE}]($REPO_URL/blob/main/post/${FILENAME}.md)"
+              
+              # Insert into README after the specified header with deduplication
+              if ! grep -qF "$LINK" README.md; then
+                sed -i '/### Premium Smart TVs for the Ultimate Setup/a '"$LINK"'' README.md
+              fi
+            fi
+          done
+          
+          # Ensure sitemap_template.xml exists
+          if [ ! -f "sitemap_template.xml" ]; then
+            # Create a basic template if it doesn't exist
+            echo '<?xml version="1.0" encoding="UTF-8"?>' > sitemap_template.xml
+            echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' >> sitemap_template.xml
+            echo '  <!-- Base URLs will be added here -->' >> sitemap_template.xml
+          fi
+          
+          # Update sitemap.xml
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > sitemap.xml
+          echo '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' >> sitemap.xml
+          
+          # Add existing entries from template (EXCEPT the </urlset>)
+          grep -v '</urlset>' sitemap_template.xml | grep -v '<?xml' >> sitemap.xml
+          
+          # Add new entries
+          find post -name '*.md' -type f 2>/dev/null | sort | while read -r file; do
+            FILENAME=$(basename "$file" .md)
+            LOC="$BASE_URL/post/${FILENAME}.md"
+            LASTMOD=$(git log -1 --format="%ad" --date=iso-strict -- "$file" 2>/dev/null || date -u +"%Y-%m-%dT%H:%M:%SZ")
+            
+            echo "  <url>" >> sitemap.xml
+            echo "    <loc>${LOC}</loc>" >> sitemap.xml
+            echo "    <lastmod>${LASTMOD}</lastmod>" >> sitemap.xml
+            echo "    <changefreq>weekly</changefreq>" >> sitemap.xml
+            echo "    <priority>0.8</priority>" >> sitemap.xml
+            echo "  </url>" >> sitemap.xml
+          done
+          
+          echo '</urlset>' >> sitemap.xml
+          
+          # Validate XML with beautifulsoup
+          python -c "from bs4 import BeautifulSoup; soup = BeautifulSoup(open('sitemap.xml', 'r').read(), 'xml'); print('XML Validation: OK')"
+          
+          # Commit changes
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add README.md sitemap.xml
+          git commit -m "Auto-update documentation links" || echo "No changes to commit"
+          git push || echo "No changes to push"
